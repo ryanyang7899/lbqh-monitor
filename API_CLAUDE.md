@@ -26,7 +26,7 @@
 | 服务地址 | `http://localhost:8100`（当前仅绑定本机 `127.0.0.1`） |
 | 注册鉴权 | 邮箱 + 密码（scrypt 哈希）。**第一个注册的用户自动成为管理员** |
 | Web 会话 | Cookie（HttpOnly, SameSite=Lax），登录成功即随请求自动携带 |
-| 程序化调用 | 每用户可创建 API 令牌，请求头 `X-API-Key: <令牌>` |
+| 程序化调用 | 每用户可创建 API 令牌，请求头 `Authorization: Bearer <令牌>`（对齐 DeepSeek 风格） |
 | 数据隔离 | 所有业务数据（余额快照、月度明细、统计）均带 `user_id`，**只返回当前用户自己的数据** |
 | 凭据加密 | 平台密码 / 模型 API Key 用 Fernet 加密存储；前端绝不回显密码（只显示「已设置」） |
 | 数据刷新 | 余额按用户自定义间隔（默认 1 小时）自动抓；`POST /api/balance/fetch` 立即抓一次；月度明细每日 02:10 自动抓当月 |
@@ -49,17 +49,17 @@
 
 1. 网页端「API 令牌」页创建令牌（命名可辨识，如 `my-app`）；
 2. 令牌格式 `lbqh-<32位hex>`，**只在创建响应里明文显示一次**，立即复制保存；
-3. 调用接口时带请求头 `X-API-Key: <令牌>`，即可访问**该账号名下**的数据。
+3. 调用接口时带请求头 `Authorization: Bearer <令牌>`，即可访问**该账号名下**的数据。
 
 ```bash
-# 获取当前用户最新余额
-curl -H "X-API-Key: lbqh-a1b2c3..." http://localhost:8100/api/balance
+# 获取当前用户最新余额（DeepSeek 风格）
+curl -H "Authorization: Bearer lbqh-a1b2c3..." http://localhost:8100/user/balance
 
 # 获取最近 7 天历史（画曲线用）
-curl -H "X-API-Key: lbqh-a1b2c3..." "http://localhost:8100/api/balance/history?days=7"
+curl -H "Authorization: Bearer lbqh-a1b2c3..." "http://localhost:8100/api/balance/history?days=7"
 
 # 立即更新一次余额（同步等待 ~10-20 秒，返回最新快照）
-curl -X POST -H "X-API-Key: lbqh-a1b2c3..." http://localhost:8100/api/balance/fetch
+curl -X POST -H "Authorization: Bearer lbqh-a1b2c3..." http://localhost:8100/api/balance/fetch
 ```
 
 ### 3.3 Python（requests）
@@ -69,13 +69,14 @@ import requests
 
 BASE = "http://localhost:8100"
 TOKEN = "lbqh-a1b2c3..."          # 在网页端「API 令牌」页创建
-HEADERS = {"X-API-Key": TOKEN}
+HEADERS = {"Authorization": f"Bearer {TOKEN}"}
 
 def get_balance() -> dict:
-    """获取当前用户最新余额快照。失败抛异常，调用方自行处理。"""
-    r = requests.get(f"{BASE}/api/balance", headers=HEADERS, timeout=10)
+    """获取当前用户最新余额（DeepSeek 风格）。失败抛异常，调用方自行处理。"""
+    r = requests.get(f"{BASE}/user/balance", headers=HEADERS, timeout=10)
     r.raise_for_status()
-    return r.json()  # {"id":..., "fetched_at":..., "balance":..., "total_spent":..., "month_spent":...}
+    return r.json()
+    # {"is_available": true, "balance_infos": [{"currency":"CNY","total_balance":"984.50","granted_balance":"0","topped_up_balance":"0"}]}
 
 def get_history(days: int = 7) -> list[dict]:
     """获取最近 N 天余额历史（按时间从早到晚排序）。"""
@@ -91,7 +92,7 @@ def get_history(days: int = 7) -> list[dict]:
 ### 4.0 鉴权总览
 
 - **Web 会话**：注册/登录成功后，服务下发 `session` Cookie（HttpOnly）。浏览器里直接可用；**不要用 Web 会话 Cookie 做程序化访问**，程序用 API 令牌。
-- **API 令牌**：请求头 `X-API-Key: <令牌>`。令牌与用户绑定，数据访问自动限定该用户。
+- **API 令牌（程序化调用）**：请求头 `Authorization: Bearer <令牌>`（对齐 DeepSeek 风格）。令牌与用户绑定，数据访问自动限定该用户。**旧版 `X-API-Key` 头已废弃，一律返回 401**。
 - **未登录/令牌无效** → `401`（页面会跳回登录视图；程序需自行处理）。
 - 所有数据接口（4.2 之后）都要求鉴权并且只返回当前账号名下数据。
 
@@ -161,31 +162,40 @@ curl -X POST -H "Content-Type: application/json" http://localhost:8100/auth/logi
 | `POST /api/tokens` `{"name":"my-app"}` | 创建令牌，返回 `{"token":"lbqh-..."}`（**只此一次明文**） |
 | `DELETE /api/tokens/{token}` | 删除/吊销指定令牌 |
 
-### 4.4 `GET /api/balance` — 最新余额
+### 4.4 `GET /user/balance` — 查询余额（DeepSeek 风格，推荐）
 
-- **鉴权**：必需
-- **返回**：当前用户最新一条余额快照
+- **鉴权**：`Authorization: Bearer <令牌>`（必需）
+- **返回**：结构**完全对齐 DeepSeek `/user/balance`**，只暴露余额信息，不外泄任何内部字段（id/抓取时间/支出等一概没有）
+- **路径说明**：路径是 `/user/balance`（不是 `/api/balance`），方便需要「和 DeepSeek 一样的接入方式」的程序直接替换请求地址使用
 
 ```json
 {
-  "id": 2,
-  "fetched_at": "2026-08-24T08:31:53Z",
-  "balance": 999.35175,
-  "total_spent": 0.64825,
-  "month_spent": 0.64825
+  "is_available": true,
+  "balance_infos": [
+    {
+      "currency": "CNY",
+      "total_balance": "984.50",
+      "granted_balance": "0",
+      "topped_up_balance": "0"
+    }
+  ]
 }
 ```
 
 | 字段 | 类型 | 含义 |
 |---|---|---|
-| `fetched_at` | string | 抓取时间，ISO 8601 **UTC** |
-| `balance` | float | **账户当前余额（元）** |
-| `total_spent` | float | 累计总支出（元） |
-| `month_spent` | float | 本月支出（元） |
+| `is_available` | bool | 是否有有效余额数据（未配置/无数据时 `false` 且 `balance_infos` 为空数组） |
+| `balance_infos[].currency` | string | 币种，固定 `CNY` |
+| `balance_infos[].total_balance` | string | **账户当前余额（元）**，两位小数 |
+| `balance_infos[].granted_balance` | string | 赠送余额（本平台不区分，恒为 `0`） |
+| `balance_infos[].topped_up_balance` | string | 充值余额（本平台不区分，恒为 `0`） |
 
-未配置或尚无数据时返回 404（detail 为提示文案）。
+### 4.5 `GET /api/balance` — 最新快照（内部接口）
 
-### 4.5 `POST /api/balance/fetch` — 立即更新余额
+- **仅作 Web 看板内部数据源**，字段含内部结构（`id`/`fetched_at`/`total_spent`/`month_spent`/`user_id`）。**对外程序请用 `GET /user/balance`**。
+- 未配置或尚无数据时返回 404（detail 为提示文案）。
+
+### 4.6 `POST /api/balance/fetch` — 立即更新余额
 
 - **鉴权**：必需
 - **行为**：**同步**执行一次「登录 + 验证码识别 + 抓取 + 入库」，完成后直接返回最新快照
@@ -193,11 +203,11 @@ curl -X POST -H "Content-Type: application/json" http://localhost:8100/auth/logi
 - **用途**：需要比定时更及时的数据时调用
 - **注意**：消耗验证码模型成本，**勿高频轮询**；若该用户恰在抓取会返回 409；配置不完整返回 400；抓取失败返回 502
 
-### 4.6 `GET /api/balance/history?days=N` — 余额历史
+### 4.7 `GET /api/balance/history?days=N` — 余额历史
 
-- `days`：整数 1~365，默认 7；返回 `data` 数组按时间升序，同 4.4 快照结构。
+- `days`：整数 1~365，默认 7；返回 `data` 数组按时间升序，同 4.5 快照结构。
 
-### 4.7 月度消费明细
+### 4.8 月度消费明细
 
 费用页每一行是一条**独立计费记录**：同一模型同一时间片可能有多条（多次调用分别计费）。**同一月份可重复抓取，覆盖式更新**。
 
@@ -228,7 +238,7 @@ curl -X POST -H "Content-Type: application/json" http://localhost:8100/auth/logi
 
 `GET /api/monthly/details` 每行：`api_key_name`（API 密钥名）、`model`、各类 token、`fee`、`start_time`/`end_time`（**平台本地时间，东八区**）、`billing_status`（"是"/"否" 支付完成）。
 
-### 4.8 `GET /api/health` — 健康检查（无需鉴权）
+### 4.9 `GET /api/health` — 健康检查（无需鉴权）
 
 ```json
 {"status": "ok", "time": "<ISO 8601 UTC>"}
@@ -242,7 +252,7 @@ curl -X POST -H "Content-Type: application/json" http://localhost:8100/auth/logi
 |---|---|---|
 | `200` | 成功 | 正常解析 |
 | `400` | 请求参数有误（如配置不完整） | 阅读 `detail` 修复后重试 |
-| `401` | 未登录 / 令牌无效或过期 / 密码错误 | 检查 X-API-Key；重新登录 |
+| `401` | 未登录 / 令牌无效或过期 / 密码错误 | 检查 `Authorization: Bearer <令牌>` 是否正确；重新登录 |
 | `404` | 暂无数据 / 该月尚未抓取 | 先配置并抓取；或 `POST /api/monthly/fetch` |
 | `409` | 该用户正在抓取中（余额或月度） | 等几秒再查 status / 重试 |
 | `429` | 登录失败次数过多，已锁定 10 分钟 | 稍后再试 |
@@ -263,13 +273,14 @@ curl -X POST -H "Content-Type: application/json" http://localhost:8100/auth/logi
 8. **同一月份可重复抓取（覆盖式更新）**；费用页明细随消费动态增长，要"完整"当月数据请在月末后再抓一次。每日 02:10 服务自动补抓当月。
 9. **每次真实登录都要调用平台的多模态验证码识别**（`POST /config/test`、立即抓取、定时抓取均消耗少量费用）。程序轮询别太频繁——默认间隔即可，要即时数据用 `POST /api/balance/fetch`。
 10. **服务重启后 `id` 继续递增**；判断新旧用 `fetched_at` 或 `id` 大小，不要假设从 1 开始。服务刚启动会在首次扫描后入库，未配置用户的相关接口均返回 404 提示。
+11. **对外程序一律用 `GET /user/balance` + `Authorization: Bearer`**；`/api/balance` 是内部接口（含内部字段），`X-API-Key` 头已废弃返回 401。需要「DeepSeek 同款接入」时，把请求地址指向 `http://<服务IP>:8100` 即可直接替换。
 
 ---
 
 ## 7. 接入建议
 
 - **轮询频率**：与默认抓取间隔匹配即可（≤ 1 小时一次）；需要即时余额（充值/大额消费后）用 `POST /api/balance/fetch`。
-- **告警阈值**：用 `balance` 字段与你的阈值比较；留出抓取延迟余量。
+- **告警阈值**：用 `GET /user/balance` 的 `balance_infos[].total_balance`（字符串）转数值后与阈值比较；留出抓取延迟余量。
 - **历史曲线**：`/api/balance/history?days=N`，`data` 数组直接画折线（x=`fetched_at`，y=`balance`）。
 - **展示**：余额显示 2 位小数（`999.35` 元）。
 - **按月监控**：`/api/monthly/months` 确认已抓 → 没有则 `POST /api/monthly/fetch?month=YYYY-MM` → `/api/monthly/stats` 查模型级 token/费用。

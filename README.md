@@ -10,7 +10,7 @@
 - **自助配置**：前端配置页填写平台账号、密码、验证码识别模型、模型 API 地址与 Key、抓取间隔（10 分钟~1 天）、启用开关；「测试连接」真实登录验证
 - **统一调度**：服务每 60 秒扫描启用账号，按各用户间隔异步抓取余额；每月 02:10 自动补抓当月消费明细
 - **Web 看板**：余额卡片、余额趋势曲线、月度模型费用占比 / Tokens 堆叠图、月度统计与明细表（ECharts，跟随系统深浅色）
-- **程序化 API**：每用户可创建 API 令牌，`X-API-Key` 鉴权访问自己名下的数据
+- **程序化 API**：每用户可创建 API 令牌，`Authorization: Bearer <令牌>` 鉴权访问自己名下的数据（对齐 DeepSeek 风格）
 - **安全**：平台凭据 Fernet 加密落库；登录密码 scrypt 哈希；登录失败 5 次锁定 10 分钟；密码永不回显
 
 ## 快速开始
@@ -61,12 +61,12 @@ static/        Web 前端 SPA（登录/看板/配置/令牌）
 | `GET/PUT /api/config` | 查看/保存自己的平台配置 |
 | `POST /api/config/test` | 测试连接（真实登录一次） |
 | `GET/POST /api/tokens` | 管理 API 令牌 |
-| `GET /api/balance` | 最新余额 |
+| `GET /user/balance` | 最新余额（DeepSeek 风格） |
 | `GET /api/balance/history?days=N` | 余额历史 |
 | `POST /api/balance/fetch` | 立即刷新余额 |
 | `GET/POST /api/monthly/*` | 月度明细与统计 |
 
-调用方式：网页用会话 Cookie；程序用请求头 `X-API-Key: <用户自己的令牌>`。
+调用方式：网页用会话 Cookie；程序用请求头 `Authorization: Bearer <用户自己的令牌>`。
 
 详细接口文档见 `API_CLAUDE.md`。
 

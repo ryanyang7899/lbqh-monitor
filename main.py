@@ -318,6 +318,28 @@ def delete_token(token: str, user: dict = Depends(get_current_user)):
 
 # ================= 余额接口（按当前用户） =================
 
+@app.get("/user/balance")
+def user_balance(user: dict = Depends(get_current_user)):
+    """DeepSeek 风格的余额查询：GET /user/balance，Bearer 令牌鉴权。
+
+    返回结构与 DeepSeek /user/balance 对齐，只暴露余额信息，不外泄内部字段。
+    """
+    latest = store.get_latest(user["id"])
+    if latest is None:
+        return {"is_available": False, "balance_infos": []}
+    return {
+        "is_available": True,
+        "balance_infos": [
+            {
+                "currency": "CNY",
+                "total_balance": f"{latest['balance']:.2f}",
+                "granted_balance": "0",
+                "topped_up_balance": "0",
+            }
+        ],
+    }
+
+
 @app.get("/api/balance")
 def balance(user: dict = Depends(get_current_user)):
     latest = store.get_latest(user["id"])

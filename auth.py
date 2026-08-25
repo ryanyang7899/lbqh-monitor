@@ -4,7 +4,7 @@ import hashlib
 import hmac
 import time
 
-from fastapi import Header, HTTPException, Request
+from fastapi import HTTPException, Request
 
 from storage import (
     delete_session,
@@ -67,15 +67,23 @@ def clear_login_failure(email: str) -> None:
     _LOGIN_FAIL.pop(email, None)
 
 
-# ---- FastAPI 依赖：从会话 Cookie 或 X-API-Key 解析当前用户 ----
-def get_current_user(
-    request: Request,
-    x_api_key: str = Header(default=""),
-) -> dict:
-    if x_api_key:
-        u = get_user_by_api_token(x_api_key.strip())
+# ---- FastAPI 依赖：从 Bearer 令牌或会话 Cookie 解析当前用户 ----
+def _bearer_token(request: Request) -> str:
+    """解析 Authorization: Bearer <token> 请求头，无则返回空串。"""
+    auth = request.headers.get("authorization", "").strip()
+    if auth.lower().startswith("bearer "):
+        return auth[7:].strip()
+    return ""
+
+
+def get_current_user(request: Request) -> dict:
+    # 程序化调用：Authorization: Bearer <API 令牌>（对齐 DeepSeek 风格）
+    token = _bearer_token(request)
+    if token:
+        u = get_user_by_api_token(token)
         if u:
             return u
+    # Web 前端：会话 cookie（登录态）
     token = request.cookies.get("session")
     if token:
         u = get_session_user(token)
@@ -84,13 +92,10 @@ def get_current_user(
     raise HTTPException(status_code=401, detail="未登录或凭据无效")
 
 
-def get_current_user_optional(
-    request: Request,
-    x_api_key: str = Header(default=""),
-) -> dict | None:
+def get_current_user_optional(request: Request) -> dict | None:
     """与 get_current_user 相同但不抛错（供公开接口选配用户上下文）。"""
     try:
-        return get_current_user(request, x_api_key)
+        return get_current_user(request)
     except HTTPException:
         return None
 

@@ -252,7 +252,7 @@ tbody tr:hover { background:color-mix(in srgb,var(--accent) 6%,transparent); }
     <div id="tab-tokens" style="display:none;">
       <div class="card" style="max-width:760px;">
         <h2>API 令牌（供你的其他软件程序化调用本服务的接口）</h2>
-        <p class="hint" style="margin-bottom:12px;">调用时在请求头带 <code>X-API-Key: &lt;令牌&gt;</code>，即可访问属于你名下账号的余额 / 月度数据接口。令牌只在创建时明文展示一次。</p>
+        <p class="hint" style="margin-bottom:12px;">调用时在请求头带 <code>Authorization: Bearer &lt;令牌&gt;</code>，即可访问属于你名下账号的余额 / 月度数据接口。令牌只在创建时明文展示一次。</p>
         <div class="toolbar" style="margin-bottom:10px;">
           <input id="tokName" placeholder="令牌名称（如我的小程序）" style="width:220px;">
           <button id="btnCreateTok" class="primary">创建令牌</button>
