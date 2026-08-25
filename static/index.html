@@ -1,0 +1,573 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>联并千行MaaS · 使用监控</title>
+<script src="https://cdn.jsdelivr.net/npm/echarts@5.5.1/dist/echarts.min.js"></script>
+<style>
+:root {
+  --bg:#f5f6f8; --card:#fff; --text:#1f2329; --muted:#6b7280; --border:#e5e7eb;
+  --accent:#2563eb; --up:#dc2626; --ok:#16a34a; --warn-bg:#fef3c7; --warn-border:#f59e0b;
+}
+@media (prefers-color-scheme: dark) {
+  :root {
+    --bg:#0f1115; --card:#1a1d24; --text:#e5e7eb; --muted:#9ca3af; --border:#2b2f38;
+    --accent:#60a5fa; --up:#f87171; --ok:#4ade80; --warn-bg:#3a2f0f; --warn-border:#f59e0b;
+  }
+}
+* { box-sizing:border-box; margin:0; padding:0; }
+body { font-family:-apple-system,"PingFang SC","Microsoft YaHei",sans-serif; background:var(--bg); color:var(--text); min-height:100vh; transition:background .2s; }
+a { color:var(--accent); cursor:pointer; }
+button { font-family:inherit; cursor:pointer; border:1px solid var(--border); background:var(--card); color:var(--text); border-radius:8px; padding:7px 14px; font-size:13px; transition:.15s; }
+button:hover { border-color:var(--accent); color:var(--accent); }
+button:disabled { opacity:.5; cursor:not-allowed; }
+button.primary { background:var(--accent); color:#fff; border-color:var(--accent); }
+button.primary:hover { filter:brightness(1.1); color:#fff; }
+button.danger:hover { color:var(--up); border-color:var(--up); }
+input, select { font-family:inherit; background:var(--card); color:var(--text); border:1px solid var(--border); border-radius:8px; padding:8px 10px; font-size:14px; width:100%; }
+label { display:block; font-size:13px; color:var(--muted); margin:12px 0 5px; }
+
+/* 布局 */
+.wrap { max-width:1500px; margin:0 auto; padding:14px 20px 50px; }
+.topbar { display:flex; align-items:center; gap:12px; flex-wrap:wrap; margin-bottom:14px; }
+.topbar h1 { font-size:20px; font-weight:600; margin-right:auto; }
+.tabs { display:flex; gap:4px; margin-bottom:16px; border-bottom:1px solid var(--border); }
+.tab { padding:10px 18px; border:none; background:none; border-bottom:2px solid transparent; border-radius:0; color:var(--muted); font-size:14px; }
+.tab.active { color:var(--accent); border-bottom-color:var(--accent); }
+.pill { font-size:12px; padding:3px 10px; border-radius:999px; border:1px solid var(--border); color:var(--muted); }
+.pill.ok { color:var(--ok); border-color:var(--ok); }
+.pill.err { color:var(--up); border-color:var(--up); }
+
+/* 表单 / 认证卡 */
+.auth-wrap { max-width:420px; margin:90px auto 0; }
+.auth-card { background:var(--card); border:1px solid var(--border); border-radius:14px; padding:30px 34px; }
+.auth-card h2 { font-size:20px; margin-bottom:6px; }
+.auth-card .sub { color:var(--muted); font-size:13px; margin-bottom:18px; }
+.auth-switch { text-align:center; margin-top:16px; font-size:13px; color:var(--muted); }
+
+.card { background:var(--card); border:1px solid var(--border); border-radius:12px; padding:16px 18px; }
+.card h2 { font-size:14px; font-weight:600; margin-bottom:10px; color:var(--muted); }
+.grid { display:grid; gap:14px; }
+.grid-cards { grid-template-columns:repeat(auto-fit,minmax(230px,1fr)); }
+.grid-charts { grid-template-columns:3fr 2fr 3fr; }
+.grid-bottom { grid-template-columns:3fr 2fr; }
+@media (max-width:1200px){ .grid-charts,.grid-bottom{grid-template-columns:1fr;} }
+.big { font-size:34px; font-weight:700; margin:4px 0 6px; font-variant-numeric:tabular-nums; }
+.cards-label { font-size:12px; color:var(--muted); margin-bottom:12px; }
+.stat-ok{color:var(--ok);} .stat-up{color:var(--up);} .stat-flat{color:var(--muted);}
+.card.alert { border-color:var(--up); box-shadow:0 0 0 1px var(--up) inset; }
+.alert-banner { display:none; background:var(--warn-bg); border:1px solid var(--warn-border); padding:8px 14px; border-radius:8px; font-size:13px; margin-bottom:14px; font-weight:600; }
+.alert-banner.show{display:block;}
+.chart { width:100%; height:300px; }
+table { width:100%; border-collapse:collapse; font-size:13px; }
+th,td { text-align:left; padding:7px 10px; border-bottom:1px solid var(--border); white-space:nowrap; }
+th { color:var(--muted); font-weight:600; font-size:12px; }
+td.num,th.num { text-align:right; font-variant-numeric:tabular-nums; }
+tbody tr:hover { background:color-mix(in srgb,var(--accent) 6%,transparent); }
+.empty { color:var(--muted); text-align:center; padding:24px 0; font-size:13px; }
+.muted{color:var(--muted); font-size:12px;}
+.toolbar{display:flex; gap:8px; align-items:center; flex-wrap:wrap;}
+.hint{font-size:12px; color:var(--muted); margin-top:4px;}
+.form-row{display:grid; grid-template-columns:1fr 1fr; gap:0 16px; align-items:end;}
+@media(max-width:900px){.form-row{grid-template-columns:1fr;}}
+.config-grid{display:grid; gap:30px; grid-template-columns:1.2fr .8fr;}
+@media(max-width:1100px){.config-grid{grid-template-columns:1fr;}}
+.token-row{display:flex; gap:8px; align-items:center; justify-content:space-between; padding:8px 0; border-bottom:1px solid var(--border);}
+.msg{font-size:13px; padding:8px 12px; border-radius:8px; margin-top:12px; display:none;}
+.msg.show{display:block;}
+.msg.ok{background:color-mix(in srgb,var(--ok) 12%,transparent); color:var(--ok);}
+.msg.err{background:color-mix(in srgb,var(--up) 12%,transparent); color:var(--up);}
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <!-- ===== 认证视图 ===== -->
+  <div id="viewAuth">
+    <div class="auth-wrap">
+      <div class="auth-card">
+        <h2 id="authTitle">登录</h2>
+        <div class="sub" id="authSub">登录后查看和管理自己的监控</div>
+        <label>邮箱</label>
+        <input id="authEmail" type="email" placeholder="you@example.com" autocomplete="email">
+        <label>密码</label>
+        <input id="authPwd" type="password" placeholder="至少 6 位" autocomplete="current-password">
+        <div id="authMsg" class="msg"></div>
+        <button id="authBtn" class="primary" style="width:100%; margin-top:18px; padding:10px;">登录</button>
+        <div class="auth-switch" id="authSwitch">没有账号？<a id="authToggle">去注册</a></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ===== 主界面 ===== -->
+  <div id="viewApp" style="display:none;">
+    <div class="topbar">
+      <h1>联并千行MaaS · 使用监控</h1>
+      <span class="pill" id="whoAmI"></span>
+      <button id="btnLogout">退出登录</button>
+    </div>
+
+    <div class="tabs">
+      <button class="tab active" data-tab="dashboard">监控看板</button>
+      <button class="tab" data-tab="config">配置管理</button>
+      <button class="tab" data-tab="tokens">API 令牌</button>
+    </div>
+
+    <!-- 看板 -->
+    <div id="tab-dashboard">
+      <div id="alertBanner" class="alert-banner"></div>
+
+      <div class="grid grid-cards" style="margin-bottom:14px;">
+        <div class="card" id="cardBalance">
+          <div class="cards-label">当前余额（元）</div>
+          <div class="big" id="valBalance">--</div>
+          <div class="muted" id="valChange">--</div>
+        </div>
+        <div class="card">
+          <div class="cards-label">本月支出（元）</div>
+          <div class="big" id="valMonth">--</div>
+          <div class="muted">每小时自动更新</div>
+        </div>
+        <div class="card">
+          <div class="cards-label">累计总支出（元）</div>
+          <div class="big" id="valTotal">--</div>
+          <div class="muted" id="valUpdateAt">--</div>
+        </div>
+        <div class="card">
+          <div class="cards-label">我的监控配置</div>
+          <div style="margin-top:12px; line-height:2.2;">
+            <div class="muted">平台账号：<span id="valConfigUser">--</span></div>
+            <div class="muted">抓取间隔：<span id="valConfigInterval">--</span> ｜ 状态：<span id="valConfigStatus">--</span></div>
+            <div class="muted">最近抓取：<span id="valLastFetch">--</span></div>
+          </div>
+          <div class="toolbar" style="margin-top:10px;">
+            <input id="inpTh" type="number" placeholder="告警阈值元" style="width:110px;">
+            <button id="btnRefresh" class="primary">立即更新余额</button>
+          </div>
+        </div>
+      </div>
+
+      <div class="grid grid-charts" style="margin-bottom:14px;">
+        <div class="card">
+          <h2>余额趋势</h2>
+          <div class="toolbar" style="margin-bottom:8px;">
+            <button id="btnDays7">近7天</button>
+            <button id="btnDays30">近30天</button>
+          </div>
+          <div id="chartTrend" class="chart"></div>
+        </div>
+        <div class="card">
+          <h2>月度模型费用占比</h2>
+          <div id="chartPie" class="chart"></div>
+        </div>
+        <div class="card">
+          <h2>月度模型 token（堆叠）</h2>
+          <div id="chartTokens" class="chart"></div>
+        </div>
+      </div>
+
+      <div class="grid grid-bottom">
+        <div class="card">
+          <div class="toolbar" style="margin-bottom:10px;">
+            <h2 style="margin:0;">模型月度统计</h2>
+            <span style="flex:1"></span>
+            <select id="selMonth" style="width:auto;"></select>
+            <button id="btnFetchMonth">抓取此月</button>
+          </div>
+          <div id="tblStatsWrap"></div>
+        </div>
+        <div class="card">
+          <div class="toolbar" style="margin-bottom:10px;">
+            <h2 style="margin:0;">最近消费明细</h2>
+            <span style="flex:1"></span>
+            <span class="muted">最新 30 条</span>
+          </div>
+          <div style="overflow-x:auto;"><div id="tblDetailsWrap"></div></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- 配置管理 -->
+    <div id="tab-config" style="display:none;">
+      <div class="config-grid">
+        <div class="card">
+          <h2>平台连接配置</h2>
+          <p class="hint" style="margin-bottom:10px;">这些是你在「联并千行MaaS」平台的账号与模型 API 凭据，仅加密存储在服务器，页面不会回显密码。</p>
+          <label>平台登录账号</label>
+          <input id="cUser" placeholder="你在 lbqh.paratera.com 的账号">
+          <label>平台登录密码</label>
+          <input id="cPwd" type="password" placeholder="不修改则留空">
+          <div class="form-row">
+            <div>
+              <label>验证码识别模型</label>
+              <input id="cModel" placeholder="如 Qwen3.5-35B-A3B">
+            </div>
+            <div>
+              <label>更新间隔（分钟）</label>
+              <select id="cInterval" style="margin-top:5px;">
+                <option value="10">每 10 分钟</option>
+                <option value="30">每 30 分钟</option>
+                <option value="60" selected>每 1 小时</option>
+                <option value="180">每 3 小时</option>
+                <option value="360">每 6 小时</option>
+                <option value="720">每 12 小时</option>
+                <option value="1440">每天一次</option>
+              </select>
+            </div>
+          </div>
+          <label>模型 API 请求地址</label>
+          <input id="cApiUrl" placeholder="https://maasapi.paratera.com/v1/chat/completions">
+          <label>模型 API Key</label>
+          <input id="cApiKey" type="password" placeholder="不修改则留空">
+          <label>平台地址</label>
+          <input id="cBaseUrl" placeholder="https://lbqh.paratera.com">
+          <div class="toolbar" style="margin-top:14px;">
+            <button id="btnTestConfig">测试连接</button>
+            <button id="btnSaveConfig" class="primary">保存配置</button>
+            <span class="muted" id="cfgSavedAt"></span>
+          </div>
+          <div id="cfgMsg" class="msg"></div>
+        </div>
+        <div class="card">
+          <h2>抓取状态与说明</h2>
+          <table>
+            <tbody>
+              <tr><td>最近抓取时间</td><td id="stLastAt">--</td></tr>
+              <tr><td>最近抓取结果</td><td id="stLastOk">--</td></tr>
+              <tr><td>抓取失败原因</td><td id="stLastErr" style="white-space:normal;">--</td></tr>
+            </tbody>
+          </table>
+          <p class="hint" style="margin-top:14px; line-height:1.7;">
+            · 保存配置后即开始按设定间隔自动抓取余额。<br>
+            · 每天 02:10 自动补抓当月消费明细。<br>
+            · 「测试连接」会真实调用一次模型验证码识别（少量成本）。<br>
+            · 建议先「测试连接」成功后再「保存」，保证配置可用。
+          </p>
+        </div>
+      </div>
+    </div>
+
+    <!-- API 令牌 -->
+    <div id="tab-tokens" style="display:none;">
+      <div class="card" style="max-width:760px;">
+        <h2>API 令牌（供你的其他软件程序化调用本服务的接口）</h2>
+        <p class="hint" style="margin-bottom:12px;">调用时在请求头带 <code>X-API-Key: &lt;令牌&gt;</code>，即可访问属于你名下账号的余额 / 月度数据接口。令牌只在创建时明文展示一次。</p>
+        <div class="toolbar" style="margin-bottom:10px;">
+          <input id="tokName" placeholder="令牌名称（如我的小程序）" style="width:220px;">
+          <button id="btnCreateTok" class="primary">创建令牌</button>
+        </div>
+        <div id="tokNew" class="msg"></div>
+        <div id="tokList"></div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+/* ================= 基础 ================= */
+const REFRESH_MS = 60000;
+let charts = {}, curDayRange = 7, curMonth = "";
+
+async function api(path, opts = {}) {
+  const r = await fetch(path, {
+    method: opts.method || "GET",
+    headers: { "Content-Type": "application/json", ...(opts.headers || {}) },
+    body: opts.body ? JSON.stringify(opts.body) : undefined,
+  });
+  if (r.status === 401) { requireAuth(); throw new Error("未登录"); }
+  const data = r.status === 204 ? null : await r.json().catch(() => null);
+  if (!r.ok) throw new Error((data && data.detail) || `${path} → HTTP ${r.status}`);
+  return data;
+}
+const wait = ms => new Promise(r => setTimeout(r, ms));
+function fmtMoney(n){ return n==null?"--":Number(n).toLocaleString("zh-CN",{minimumFractionDigits:2,maximumFractionDigits:2}); }
+function fmtTokens(n){ if(n==null)return"--"; if(n>=1e6)return (n/1e6).toFixed(1)+"M"; if(n>=1e3)return (n/1e3).toFixed(1)+"K"; return String(n); }
+function fmtAgo(iso){ if(!iso)return"--"; const t=(new Date(iso.replace("Z","Z")).getTime()-Date.now())/1000; const mins=Math.round(t/60);
+  if(mins>=-1) return mins<1?"刚刚":mins+" 分钟后"; if(mins>-60) return (-mins)+" 分钟前"; const h=Math.round(-mins/60); if(h<48)return h+" 小时前"; return Math.round(h/24)+" 天前"; }
+function el(id){ return document.getElementById(id); }
+
+/* ================= 认证状态 ================= */
+let AUTH = null; // {user, configured}
+async function refreshAuth() {
+  try { AUTH = await api("/auth/me"); } catch { AUTH = null; }
+  if (AUTH) { showApp(); } else { showAuth(); }
+}
+function requireAuth(){ }
+function showAuth(){ el("viewAuth").style.display="block"; el("viewApp").style.display="none"; }
+function showApp(){ el("viewAuth").style.display="none"; el("viewApp").style.display="block";
+  el("whoAmI").textContent = AUTH.user.email + (AUTH.user.is_admin ? "（管理员）" : "");
+  loadDashboard(); }
+
+let _authMode = "login";
+function setAuthMode(m){
+  _authMode = m;
+  el("authTitle").textContent = m==="login" ? "登录" : "注册";
+  el("authSub").textContent = m==="login" ? "登录后查看和管理自己的监控" : "创建账号，第一个注册用户自动成为管理员";
+  el("authBtn").textContent = m==="login" ? "登录" : "注册";
+  el("authSwitch").innerHTML = m==="login" ? '没有账号？<a id="authToggle">去注册</a>' : '已有账号？<a id="authToggle">去登录</a>';
+  el("authToggle").onclick = () => setAuthMode(m==="login"?"register":"login");
+}
+async function doAuth(){
+  const email = el("authEmail").value.trim(), pwd = el("authPwd").value;
+  el("authMsg").className = "msg"; el("authMsg").style.display = "none";
+  try {
+    const path = _authMode==="login" ? "/auth/login" : "/auth/register";
+    await api(path, { method:"POST", body:{ email, password:pwd } });
+    el("authPwd").value = "";
+    await refreshAuth();
+    loadDashboard();
+  } catch(e){ showMsg(el("authMsg"), e.message, false); }
+}
+
+/* ================= 看板 ================= */
+async function loadDashboard(){
+  // 配置摘要
+  try {
+    const c = await api("/api/config");
+    el("valConfigUser").textContent = c.configured ? c.lbqh_user || "(未填)" : "未配置";
+    el("valConfigInterval").textContent = c.configured ? c.fetch_interval/60 + " 分钟" : "--";
+    el("valConfigStatus").textContent = c.enabled ? (c.last_fetch_ok===false?"失败":"正常") : "已停用";
+    el("stLastAt").textContent = c.last_fetch_at ? c.last_fetch_at.replace("Z"," UTC") : "--";
+    el("stLastOk").textContent = c.last_fetch_ok===null?"--":(c.last_fetch_ok?"成功":"失败");
+    el("stLastErr").textContent = c.last_fetch_error || "--";
+    el("valLastFetch").textContent = c.last_fetch_at ? fmtAgo(c.last_fetch_at) : "--";
+    if (c.configured) {
+      if (!el("cUser").value) fillConfigForm(c);
+    } else if (!el("cUser").value) {
+      el("valBalance").textContent = "--"; el("valMonth").textContent="--"; el("valTotal").textContent="--";
+      el("tblStatsWrap").innerHTML = el("tblDetailsWrap").innerHTML =
+        '<div class="empty">你还没有配置平台账号，请到「配置管理」填写并保存。</div>';
+      return;
+    }
+  } catch {}
+  if (!curMonth) await loadMonths();   // 登录后首次进入看板时初始化月份下拉
+  await Promise.allSettled([loadBalance(), loadTrend(curDayRange), loadMonthly()]);
+}
+
+function fillConfigForm(c){
+  el("cUser").value = c.lbqh_user || "";
+  el("cModel").value = c.captcha_model || "Qwen3.5-35B-A3B";
+  el("cApiUrl").value = c.maas_api_url || "";
+  el("cBaseUrl").value = c.lbhqh_base_url || c.lbqh_base_url || "";
+  const min = (c.fetch_interval||3600)/60;
+  el("cInterval").value = [10,30,60,180,360,720,1440].includes(min) ? min : 60;
+  el("cfgSavedAt").textContent = c.password_set ? "平台凭据已加密保存" : "";
+}
+
+async function loadBalance(){
+  let latest;
+  try { latest = await api("/api/balance"); } catch { return; }
+  el("valBalance").textContent = fmtMoney(latest.balance);
+  el("valMonth").textContent = fmtMoney(latest.month_spent);
+  el("valTotal").textContent = fmtMoney(latest.total_spent);
+  el("valUpdateAt").textContent = "更新于 " + (latest.fetched_at ? latest.fetched_at.replace("Z"," UTC") : "");
+
+  const h = await api("/api/balance/history?days=7").catch(()=>({data:[]}));
+  const data = h.data||[];
+  let delta = null;
+  if (data.length>=2) delta = data[data.length-1].balance - data[data.length-2].balance;
+  const ch = el("valChange"), card = el("cardBalance");
+  const th = Number(el("inpTh").value||0);
+  card.classList.toggle("alert", !!th && latest.balance < th);
+  const banner = el("alertBanner");
+  banner.textContent = th && latest.balance<th ? `⚠ 余额 ${fmtMoney(latest.balance)} 元已低于告警阈值 ${fmtMoney(th)}` : "";
+  banner.classList.toggle("show", !!th && latest.balance<th);
+  if (delta===null){ ch.textContent="暂无历史对比"; ch.className="muted"; }
+  else if (Math.abs(delta)<0.0001){ ch.textContent="→ 较上次无变化"; ch.className="muted stat-flat"; }
+  else if (delta<0){ ch.textContent=`↓ 较上次支出 ${fmtMoney(-delta)} 元`; ch.className="muted stat-up"; }
+  else { ch.textContent=`↑ 较上次增加 ${fmtMoney(delta)} 元`; ch.className="muted stat-ok"; }
+}
+
+function themeOpts(){
+  return matchMedia("(prefers-color-scheme: dark)").matches
+    ? { text:"#e5e7eb", axis:"#7a828e", grid:"#2b2f38" }
+    : { text:"#6b7280", axis:"#9aa0a6", grid:"#ececf0" };
+}
+function mk(id, opt){ if(!charts[id]) charts[id]=echarts.init(el(id)); charts[id].setOption(opt, true); }
+
+async function loadTrend(days){
+  try { var h = await api(`/api/balance/history?days=${days}`); } catch { return; }
+  const data = h.data||[]; const t = themeOpts();
+  mk("chartTrend", {
+    grid:{left:46,right:16,top:18,bottom:26},
+    tooltip:{trigger:"axis", valueFormatter:v=>fmtMoney(v)+" 元"},
+    xAxis:{type:"category", data:data.map(d=>(d.fetched_at||"").slice(5,16)), axisLine:{lineStyle:{color:t.axis}}, axisLabel:{color:t.text}},
+    yAxis:{type:"value", scale:true, splitLine:{lineStyle:{color:t.grid}}, axisLabel:{color:t.text, formatter:v=>v.toFixed(0)}},
+    series:[{type:"line", smooth:true, data:data.map(d=>d.balance), symbolSize:5, lineStyle:{width:2},
+      itemStyle:{color:getComputedStyle(document.body).getPropertyValue("--accent").trim()}, areaStyle:{opacity:.12}, name:`余额（近${days}天）`}],
+  });
+}
+
+async function loadMonths(){
+  let months = [];
+  try { const d = await api("/api/monthly/months"); months = d.months||[]; } catch {}
+  const now = new Date(); const thisMonth = now.toISOString().slice(0,7);
+  const sel = el("selMonth");
+  sel.innerHTML = "";
+  if (!months.includes(thisMonth)) months.unshift(thisMonth);
+  months.forEach(m=>{ const o=document.createElement("option"); o.value=m; o.textContent=m+(m===thisMonth?"（当月）":""); sel.appendChild(o); });
+  curMonth = sel.value || thisMonth;
+}
+
+async function loadMonthly(month = curMonth){
+  let stats=[];
+  try { const d = await api(`/api/monthly/stats?month=${month}`); stats = d.data||[]; } catch {}
+  const t = themeOpts();
+  mk("chartPie", {
+    tooltip:{trigger:"item", formatter:"{b}<br/>¥{c}（{d}%）"},
+    legend:{bottom:0, textStyle:{color:t.text}},
+    series:[{type:"pie", radius:["42%","68%"], center:["50%","44%"],
+      label:{formatter:"{b}\n{d}%", color:t.text, fontSize:11},
+      data:stats.map(x=>({name:x.model, value:x.total_fee}))}],
+  });
+  mk("chartTokens", {
+    tooltip:{trigger:"axis", axisPointer:{type:"shadow"}},
+    legend:{bottom:0, textStyle:{color:t.text}},
+    grid:{left:70, right:24, top:18, bottom:40},
+    xAxis:{type:"value", splitLine:{lineStyle:{color:t.grid}}, axisLabel:{color:t.text}},
+    yAxis:{type:"category", data:stats.map(x=>x.model.length>24?x.model.slice(0,24)+"…":x.model), axisLabel:{color:t.text}},
+    series:[
+      {name:"文本输入", type:"bar", stack:"t", color:"#3b82f6", data:stats.map(x=>x.text_in_tokens)},
+      {name:"文本输出", type:"bar", stack:"t", color:"#f59e0b", data:stats.map(x=>x.text_out_tokens)},
+      {name:"命中输入", type:"bar", stack:"t", color:"#10b981", data:stats.map(x=>x.hit_in_tokens)},
+      {name:"未分类", type:"bar", stack:"t", color:"#6b7280", data:stats.map(x=>x.bare_tokens)},
+    ],
+  });
+  if (!stats.length){ el("tblStatsWrap").innerHTML=`<div class="empty">${month} 尚无数据，可点击「抓取此月」</div>`; }
+  else {
+    const totTok = stats.reduce((a,x)=>a+x.total_tokens,0), totFee = stats.reduce((a,x)=>a+x.total_fee,0);
+    el("tblStatsWrap").innerHTML = `
+    <table><thead><tr><th>模型</th><th class="num">总tokens</th><th class="num">文本输入</th><th class="num">文本输出</th><th class="num">命中输入</th><th class="num">费用(元)</th><th class="num">条数</th></tr></thead><tbody>
+    ${stats.map(x=>`<tr><td title="${x.model}">${x.model}</td><td class="num"><b>${fmtTokens(x.total_tokens)}</b></td><td class="num">${fmtTokens(x.text_in_tokens)}</td><td class="num">${fmtTokens(x.text_out_tokens)}</td><td class="num">${fmtTokens(x.hit_in_tokens)}</td><td class="num">${fmtMoney(x.total_fee)}</td><td class="num">${x.rows}</td></tr>`).join("")}
+    <tr style="font-weight:600; background:color-mix(in srgb,var(--accent) 6%,transparent);"><td>合计</td><td class="num">${fmtTokens(totTok)}</td><td class="num" colspan="3"></td><td class="num">${fmtMoney(totFee)}</td><td class="num"></td></tr>
+    </tbody></table>`;
+  }
+  try {
+    const d = await api(`/api/monthly/details?month=${month}&limit=30`);
+    const arr = d.data||[];
+    el("tblDetailsWrap").innerHTML = arr.length ? `
+      <table><thead><tr><th>模型</th><th>API密钥</th><th>开始时间</th><th class="num">tokens</th><th class="num">费用(元)</th><th>支付</th></tr></thead><tbody>
+      ${arr.map(r=>`<tr><td title="${r.model}">${r.model}</td><td class="muted">${r.api_key_name.slice(0,14)}</td><td class="muted">${r.start_time}</td><td class="num">${fmtTokens(r.total_tokens)}</td><td class="num">${fmtMoney(r.fee)}</td><td class="${r.billing_status==="是"?"stat-ok":"muted"}">${r.billing_status}</td></tr>`).join("")}
+      </tbody></table>` : `<div class="empty">暂无明细（${month}）</div>`;
+  } catch { el("tblDetailsWrap").innerHTML = `<div class="empty">暂无明细</div>`; }
+}
+
+/* ================= 配置管理 ================= */
+function readConfigForm(){
+  return {
+    lbqh_user: el("cUser").value.trim(),
+    lbqh_password: el("cPwd").value,
+    captcha_model: el("cModel").value.trim(),
+    fetch_interval: Number(el("cInterval").value)*60,
+    maas_api_url: el("cApiUrl").value.trim(),
+    maas_api_key: el("cApiKey").value,
+    lbqh_base_url: el("cBaseUrl").value.trim(),
+  };
+}
+async function saveConfig(doTest){
+  showMsg(el("cfgMsg"), "", null);
+  const body = readConfigForm();
+  const btn = doTest ? el("btnTestConfig") : el("btnSaveConfig");
+  btn.disabled = true; btn.textContent = doTest ? "测试中…(约15秒)" : "保存中…";
+  try {
+    if (doTest) {
+      const r = await api("/api/config/test", { method:"POST", body });
+      showMsg(el("cfgMsg"), r.message, r.ok);
+    } else {
+      await api("/api/config", { method:"PUT", body });
+      el("cPwd").value=""; el("cApiKey").value="";
+      showMsg(el("cfgMsg"), "配置已保存，将按间隔自动抓取", true);
+      await loadDashboard();
+    }
+  } catch(e){ showMsg(el("cfgMsg"), "操作失败："+e.message, false); }
+  btn.disabled=false; btn.textContent = doTest?"测试连接":"保存配置";
+}
+
+/* ================= API 令牌 ================= */
+async function loadTokens(){
+  try { const d = await api("/api/tokens"); } catch { el("tokList").innerHTML = '<div class="empty">暂无法加载</div>'; return; }
+  try {
+    const d = await api("/api/tokens");
+    el("tokList").innerHTML = d.tokens.length ? d.tokens.map(t=>`
+      <div class="token-row"><span class="muted">${t.name}</span><code>${t.token}</code>
+      <span class="muted">${(t.created_at||"").slice(0,16).replace("T"," ")}</span>
+      <button class="danger" onclick="deleteToken('${t.token}')">删除</button></div>`).join("")
+      : '<div class="empty">还没有令牌，在下方创建</div>';
+  } catch(e){ el("tokList").innerHTML = '<div class="empty">加载失败</div>'; }
+}
+async function createToken(){
+  const name = el("tokName").value.trim() || "default";
+  showMsg(el("tokNew"), "", null);
+  try {
+    const r = await api("/api/tokens", { method:"POST", body:{ name } });
+    el("tokNew").className = "msg show ok";
+    el("tokNew").innerHTML = `新令牌：<code>${r.token}</code><br>请立即复制保存（之后不再显示明文）。`;
+    await loadTokens();
+  } catch(e){ showMsg(el("tokNew"), "创建失败："+e.message, false); }
+}
+async function deleteToken(token){
+  if (!confirm("确定删除这个令牌？用它调用接口的程序将失效。")) return;
+  try { await api("/api/tokens/"+token, { method:"DELETE" }); await loadTokens(); }
+  catch(e){ alert("删除失败："+e.message); }
+}
+
+/* ================= 工具消息 ================= */
+function showMsg(node, text, ok){
+  node.textContent = text || ""; node.className = "msg " + (text ? (ok?"show ok":"show err") : "");
+}
+
+/* ================= 交互绑定 ================= */
+document.querySelectorAll(".tab").forEach(t => t.onclick = () => switchTab(t.dataset.tab));
+function switchTab(name){
+  document.querySelectorAll(".tab").forEach(t=>t.classList.toggle("active", t.dataset.tab===name));
+  ["dashboard","config","tokens"].forEach(k=> el("tab-"+k).style.display = k===name ? "block":"none");
+  if (name==="config") loadDashboard();
+  if (name==="tokens") loadTokens();
+}
+el("authBtn").onclick = doAuth;
+el("authPwd").addEventListener("keydown", e=>{ if(e.key==="Enter") doAuth(); });
+el("authEmail").addEventListener("keydown", e=>{ if(e.key==="Enter") el("authPwd").focus(); });
+el("btnLogout").onclick = async () => { try{ await api("/auth/logout",{method:"POST"}); }catch{}; await refreshAuth(); };
+el("btnDays7").onclick = ()=>{ curDayRange=7; el("btnDays30").classList.remove("primary"); el("btnDays7").classList.add("primary"); loadTrend(7); };
+el("btnDays30").onclick = ()=>{ curDayRange=30; el("btnDays7").classList.remove("primary"); el("btnDays30").classList.add("primary"); loadTrend(30); };
+el("selMonth").onchange = ()=>{ curMonth = el("selMonth").value; loadMonthly(curMonth); };
+el("btnFetchMonth").onclick = async ()=>{
+  const m = el("selMonth").value;
+  const b = el("btnFetchMonth");
+  if(!confirm(`将抓取 ${m} 全部消费明细（会调用验证码模型，少量成本），开始？`)) return;
+  b.disabled=true; b.textContent="抓取中…";
+  try { await api(`/api/monthly/fetch?month=${m}`, {method:"POST"});
+    await wait(25000); await loadMonths(); await loadMonthly(curMonth);
+  } catch(e){ alert("触发失败："+e.message); }
+  b.disabled=false; b.textContent="抓取此月";
+};
+el("btnRefresh").onclick = async ()=>{
+  const b = el("btnRefresh");
+  if(!confirm("立即重新抓取一次余额（约 15 秒）？")) return;
+  b.disabled=true; b.textContent="抓取中…";
+  try { await api("/api/balance/fetch", {method:"POST"}); await loadDashboard(); }
+  catch(e){ alert("更新失败："+e.message); }
+  b.disabled=false; b.textContent="立即更新余额";
+};
+el("inpTh").onchange = ()=>{ localStorage.setItem("alert_th", el("inpTh").value); loadBalance(); };
+el("btnTestConfig").onclick = () => saveConfig(true);
+el("btnSaveConfig").onclick = () => saveConfig(false);
+el("btnCreateTok").onclick = createToken;
+window.addEventListener("resize", ()=>Object.values(charts).forEach(c=>c.resize()));
+matchMedia("(prefers-color-scheme: dark)").addEventListener("change", async ()=>{
+  Object.values(charts).forEach(c=>c.dispose()); charts={};
+  await Promise.allSettled([loadTrend(curDayRange), loadMonthly(curMonth)]);
+});
+
+/* ================= 启动 ================= */
+setAuthMode("login");
+el("inpTh").value = localStorage.getItem("alert_th") ?? "100";
+el("btnDays7").classList.add("primary");
+refreshAuth().then(async ()=>{
+  if (AUTH) { await loadMonths(); loadDashboard(); }
+});
+setInterval(async ()=>{ if (AUTH) loadDashboard(); }, REFRESH_MS);
+</script>
+</body>
+</html>

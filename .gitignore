@@ -1,0 +1,28 @@
+# ===== 敏感/运行数据（严禁上传） =====
+# 平台凭据（含登录密码 / MAAS API Key）
+.env
+
+# Fernet 加密主密钥（泄露=全部用户凭据可解密）
+master.key
+
+# SQLite 数据库（真实余额/明细/用户数据）
+*.db
+*.db.dprebuild
+*.backup.json
+
+# ===== 运行时产物 =====
+__pycache__/
+*.pyc
+nohup.log
+*.log
+
+# ===== 调试/探测脚本与截图（含真实账号截图） =====
+probe_*.py
+test_captcha.py
+login_experiment.py
+show_fee.py
+shot_*.png
+captcha_sample.png
+
+# ===== 环境 =====
+.venv/
