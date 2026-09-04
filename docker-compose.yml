@@ -1,0 +1,25 @@
+# 联并千行MaaS 多用户余额监控 —— Docker Compose 部署
+#
+#   docker compose up -d --build      # 构建并启动
+#
+# 数据持久化：./data 目录挂载为容器内 /app/data，
+#   - balance.db    SQLite 数据库
+#   - master.key    Fernet 主密钥（与数据库同目录）
+# 两者都保留在宿主机的 ./data，容器重建不会丢。
+
+services:
+  lbqh-monitor:
+    build: .
+    image: lbqh-monitor:latest
+    container_name: lbqh-monitor
+    restart: unless-stopped
+    ports:
+      - "8100:8100"
+    volumes:
+      - ./data:/app/data
+    env_file:
+      - ./.env
+    environment:
+      # 数据库放到持久化目录，便于随宿主机备份
+      - DB_PATH=/app/data/balance.db
+      # 主密钥复用 DB 同目录的 master.key（勿在此设 MASTER_KEY，否则覆盖文件机制）

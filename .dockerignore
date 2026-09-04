@@ -1,0 +1,26 @@
+# 敏感与运行时数据，一律不进镜像（经 volume 挂载持久化）
+.env
+master.key
+*.db
+*.db.dprebuild
+*.backup.json
+
+# 本地环境/缓存
+.venv/
+__pycache__/
+*.pyc
+nohup.log
+
+# 调试与文档（不进镜像）
+PLAN.md
+API_CLAUDE.md
+probe_*.py
+test_*.py
+login_experiment.py
+show_fee.py
+rebuild_tables.py
+*.png
+
+# VCS
+.git/
+.gitignore

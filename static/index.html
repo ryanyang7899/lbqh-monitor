@@ -4,7 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>联并千行MaaS · 使用监控</title>
-<script src="https://cdn.jsdelivr.net/npm/echarts@5.5.1/dist/echarts.min.js"></script>
+<script src="/static/echarts.min.js"></script>
 <style>
 :root {
   --bg:#f5f6f8; --card:#fff; --text:#1f2329; --muted:#6b7280; --border:#e5e7eb;
@@ -68,6 +68,8 @@ tbody tr:hover { background:color-mix(in srgb,var(--accent) 6%,transparent); }
 .empty { color:var(--muted); text-align:center; padding:24px 0; font-size:13px; }
 .muted{color:var(--muted); font-size:12px;}
 .toolbar{display:flex; gap:8px; align-items:center; flex-wrap:wrap;}
+.pager{display:inline-flex; gap:4px; align-items:center;}
+.pager button{padding:4px 10px; font-size:12px;}
 .hint{font-size:12px; color:var(--muted); margin-top:4px;}
 .form-row{display:grid; grid-template-columns:1fr 1fr; gap:0 16px; align-items:end;}
 @media(max-width:900px){.form-row{grid-template-columns:1fr;}}
@@ -181,7 +183,13 @@ tbody tr:hover { background:color-mix(in srgb,var(--accent) 6%,transparent); }
           <div class="toolbar" style="margin-bottom:10px;">
             <h2 style="margin:0;">最近消费明细</h2>
             <span style="flex:1"></span>
-            <span class="muted">最新 30 条</span>
+            <select id="detailsPageSize" style="width:auto;" onchange="setDetailsPageSize(this.value)">
+              <option value="10" selected>每页 10 条</option>
+              <option value="20">每页 20 条</option>
+              <option value="50">每页 50 条</option>
+              <option value="100">每页 100 条</option>
+            </select>
+            <span id="detailsPager" class="pager"></span>
           </div>
           <div style="overflow-x:auto;"><div id="tblDetailsWrap"></div></div>
         </div>
@@ -421,8 +429,20 @@ async function loadMonthly(month = curMonth){
       label:{formatter:"{b}\n{d}%", color:t.text, fontSize:11},
       data:stats.map(x=>({name:x.model, value:x.total_fee}))}],
   });
+  const rates = stats.map(x=>{
+    const den = (x.hit_in_tokens||0) + x.text_in_tokens;
+    return den ? x.hit_in_tokens/den*100 : null;
+  });
+  const rateFmt = r => r===null ? "-" : r.toFixed(1)+"%";
   mk("chartTokens", {
-    tooltip:{trigger:"axis", axisPointer:{type:"shadow"}},
+    tooltip:{trigger:"axis", axisPointer:{type:"shadow"},
+      formatter:ps=>{
+        const m = stats[ps[0].dataIndex];
+        const den = (m.hit_in_tokens||0) + m.text_in_tokens;
+        const r = den ? (m.hit_in_tokens/den*100).toFixed(1)+"%" : "-";
+        const rows = ps.map(p=>`${p.marker}${p.seriesName}: ${fmtTokens(p.value)}`).join("<br/>");
+        return `${m.model}<br/>${rows}<br/><b>缓存命中率</b>：${r}`;
+      }},
     legend:{bottom:0, textStyle:{color:t.text}},
     grid:{left:70, right:24, top:18, bottom:40},
     xAxis:{type:"value", splitLine:{lineStyle:{color:t.grid}}, axisLabel:{color:t.text}},
@@ -437,21 +457,50 @@ async function loadMonthly(month = curMonth){
   if (!stats.length){ el("tblStatsWrap").innerHTML=`<div class="empty">${month} 尚无数据，可点击「抓取此月」</div>`; }
   else {
     const totTok = stats.reduce((a,x)=>a+x.total_tokens,0), totFee = stats.reduce((a,x)=>a+x.total_fee,0);
+    const totIn = stats.reduce((a,x)=>a+x.text_in_tokens,0) + stats.reduce((a,x)=>a+(x.hit_in_tokens||0),0);
+    const totHit = stats.reduce((a,x)=>a+(x.hit_in_tokens||0),0);
+    const totRate = totIn ? totHit/totIn*100 : null;
     el("tblStatsWrap").innerHTML = `
-    <table><thead><tr><th>模型</th><th class="num">总tokens</th><th class="num">文本输入</th><th class="num">文本输出</th><th class="num">命中输入</th><th class="num">费用(元)</th><th class="num">条数</th></tr></thead><tbody>
-    ${stats.map(x=>`<tr><td title="${x.model}">${x.model}</td><td class="num"><b>${fmtTokens(x.total_tokens)}</b></td><td class="num">${fmtTokens(x.text_in_tokens)}</td><td class="num">${fmtTokens(x.text_out_tokens)}</td><td class="num">${fmtTokens(x.hit_in_tokens)}</td><td class="num">${fmtMoney(x.total_fee)}</td><td class="num">${x.rows}</td></tr>`).join("")}
-    <tr style="font-weight:600; background:color-mix(in srgb,var(--accent) 6%,transparent);"><td>合计</td><td class="num">${fmtTokens(totTok)}</td><td class="num" colspan="3"></td><td class="num">${fmtMoney(totFee)}</td><td class="num"></td></tr>
+    <table><thead><tr><th>模型</th><th class="num">总tokens</th><th class="num">文本输入</th><th class="num">文本输出</th><th class="num">命中输入</th><th class="num">命中率</th><th class="num">费用(元)</th><th class="num">条数</th></tr></thead><tbody>
+    ${stats.map((x,i)=>`<tr><td title="${x.model}">${x.model}</td><td class="num"><b>${fmtTokens(x.total_tokens)}</b></td><td class="num">${fmtTokens(x.text_in_tokens)}</td><td class="num">${fmtTokens(x.text_out_tokens)}</td><td class="num">${fmtTokens(x.hit_in_tokens)}</td><td class="num">${rateFmt(rates[i])}</td><td class="num">${fmtMoney(x.total_fee)}</td><td class="num">${x.rows}</td></tr>`).join("")}
+    <tr style="font-weight:600; background:color-mix(in srgb,var(--accent) 6%,transparent);"><td>合计</td><td class="num">${fmtTokens(totTok)}</td><td class="num" colspan="3"></td><td class="num">${rateFmt(totRate)}</td><td class="num">${fmtMoney(totFee)}</td><td class="num"></td></tr>
     </tbody></table>`;
   }
-  try {
-    const d = await api(`/api/monthly/details?month=${month}&limit=30`);
-    const arr = d.data||[];
-    el("tblDetailsWrap").innerHTML = arr.length ? `
-      <table><thead><tr><th>模型</th><th>API密钥</th><th>开始时间</th><th class="num">tokens</th><th class="num">费用(元)</th><th>支付</th></tr></thead><tbody>
-      ${arr.map(r=>`<tr><td title="${r.model}">${r.model}</td><td class="muted">${r.api_key_name.slice(0,14)}</td><td class="muted">${r.start_time}</td><td class="num">${fmtTokens(r.total_tokens)}</td><td class="num">${fmtMoney(r.fee)}</td><td class="${r.billing_status==="是"?"stat-ok":"muted"}">${r.billing_status}</td></tr>`).join("")}
-      </tbody></table>` : `<div class="empty">暂无明细（${month}）</div>`;
-  } catch { el("tblDetailsWrap").innerHTML = `<div class="empty">暂无明细</div>`; }
+  await loadDetails(month);
 }
+
+/* ---- 最近消费明细（前端分页） ---- */
+let detailsAll = [], detailsPage = 1, detailsPageSize = 10;
+async function loadDetails(month){
+  try {
+    const d = await api(`/api/monthly/details?month=${month}&limit=2000`);
+    detailsAll = d.data||[];
+  } catch { detailsAll = []; }
+  detailsPage = 1;
+  renderDetails();
+}
+function renderDetails(){
+  const wrap = el("tblDetailsWrap");
+  if (!detailsAll.length){ wrap.innerHTML = `<div class="empty">暂无明细（${curMonth}）</div>`; el("detailsPager").innerHTML=""; return; }
+  const pages = Math.max(1, Math.ceil(detailsAll.length/detailsPageSize));
+  if (detailsPage > pages) detailsPage = pages;
+  const start = (detailsPage-1)*detailsPageSize;
+  const pageArr = detailsAll.slice(start, start+detailsPageSize);
+  wrap.innerHTML = `
+    <table><thead><tr><th>模型</th><th>API密钥</th><th>开始时间</th><th class="num">tokens</th><th class="num">费用(元)</th><th>支付</th></tr></thead><tbody>
+    ${pageArr.map(r=>`<tr><td title="${r.model}">${r.model}</td><td class="muted">${r.api_key_name.slice(0,14)}</td><td class="muted">${r.start_time}</td><td class="num">${fmtTokens(r.total_tokens)}</td><td class="num">${fmtMoney(r.fee)}</td><td class="${r.billing_status==="是"?"stat-ok":"muted"}">${r.billing_status}</td></tr>`).join("")}
+    </tbody></table>`;
+  renderPager(pages);
+}
+function renderPager(pages){
+  const p = el("detailsPager");
+  p.innerHTML = `
+    <button onclick="setDetailsPage(${detailsPage-1})" ${detailsPage<=1?'disabled':''}>‹ 上一页</button>
+    <span class="muted" style="padding:0 6px;">第 ${detailsPage}/${pages} 页 · 共 ${detailsAll.length} 条</span>
+    <button onclick="setDetailsPage(${detailsPage+1})" ${detailsPage>=pages?'disabled':''}>下一页 ›</button>`;
+}
+function setDetailsPage(p){ detailsPage = p; renderDetails(); }
+function setDetailsPageSize(size){ detailsPageSize = parseInt(size,10); detailsPage = 1; renderDetails(); }
 
 /* ================= 配置管理 ================= */
 function readConfigForm(){

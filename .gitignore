@@ -26,3 +26,9 @@ captcha_sample.png
 
 # ===== 环境 =====
 .venv/
+
+# Docker 持久化数据（balance.db / master.key）
+data/
+
+# 离线 Docker 镜像导出包（1.2GB，超出 GitHub 单文件 100MB 限制）
+lbqh-monitor-image.tar.gz
