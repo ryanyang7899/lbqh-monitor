@@ -163,6 +163,12 @@ data/                 （运行时）balance.db 与 master.key，随宿主机持
 
 ---
 
+## 相关项目
+
+- [**APIMug**](https://github.com/ryanyang7899/APIMug) — macOS 菜单栏 API 监测客户端（纯 Swift + AppKit，无 Dock 图标）。其内置的 `deepseek` 协议正是请求 `GET {base}/user/balance` 并携带 `Authorization: Bearer <token>`，与本服务的对外余额接口**完全兼容**。在 APIMug 中新增一个 `deepseek` 站点，Base URL 填本服务地址、Token 填你在本平台「API 令牌」页创建的令牌，即可在 macOS 菜单栏实时查看你的联并千行MaaS 余额。
+
+---
+
 ## 数据、备份与安全
 
 - **持久化数据**：`data/balance.db`（数据库）与 `data/master.key`（主密钥）。Docker 下两者在 `./data` 目录。**备份 = 备份整个 `./data`**。
